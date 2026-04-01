@@ -4,14 +4,19 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
-export default function ArticleIndex({ articles }) {
+export default function ArticleIndex({ articles, onSelectArticle, onBack, isStandalone = true }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const router = useRouter();
   const containerRef = useRef(null);
 
   const handleSelect = useCallback(() => {
-    router.push(`/notas/${articles[selectedIndex].slug}`);
-  }, [selectedIndex, articles, router]);
+    const slug = articles[selectedIndex].slug;
+    if (onSelectArticle) {
+      onSelectArticle(slug);
+    } else {
+      router.push(`/notas/${slug}`);
+    }
+  }, [selectedIndex, articles, router, onSelectArticle]);
 
   const handleScroll = useCallback(
     (steps) => {
@@ -29,11 +34,17 @@ export default function ArticleIndex({ articles }) {
         case "ArrowUp":   e.preventDefault(); handleScroll(-1); break;
         case "ArrowDown": e.preventDefault(); handleScroll(1);  break;
         case "Enter":     handleSelect(); break;
+        case "Escape":
+          if (onBack) {
+            e.preventDefault();
+            onBack();
+          }
+          break;
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleScroll, handleSelect]);
+  }, [handleScroll, handleSelect, onBack]);
 
   // Mouse wheel
   const handleScrollRef = useRef(handleScroll);
@@ -60,7 +71,7 @@ export default function ArticleIndex({ articles }) {
       ref={containerRef}
       className="ipod-no-select"
       style={{
-        position: "fixed",
+        position: isStandalone ? "fixed" : "absolute",
         inset: 0,
         background: "#070708",
         display: "flex",
@@ -104,17 +115,36 @@ export default function ArticleIndex({ articles }) {
         >
           SUBSTRATO
         </span>
-        <span
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9,
-            color: "rgba(255,255,255,0.18)",
-            letterSpacing: "0.28em",
-            textTransform: "uppercase",
-          }}
-        >
-          NOTAS
-        </span>
+        {onBack ? (
+          <button
+            onClick={onBack}
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 9,
+              color: "rgba(255,255,255,0.18)",
+              letterSpacing: "0.28em",
+              textTransform: "uppercase",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            NOTAS
+          </button>
+        ) : (
+          <span
+            style={{
+              fontFamily: "var(--font-geist-mono), monospace",
+              fontSize: 9,
+              color: "rgba(255,255,255,0.18)",
+              letterSpacing: "0.28em",
+              textTransform: "uppercase",
+            }}
+          >
+            NOTAS
+          </span>
+        )}
       </div>
 
       {/* Article list */}

@@ -2,7 +2,16 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
+import { ARTICLES } from "@/lib/articles";
+
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function getArticleForTrack(trackNumber) {
+  // trackNumber format: "001", "002", etc.
+  // article.number format: "N·001", "N·002", etc.
+  const article = ARTICLES.find(a => a.number === `N·${trackNumber}`);
+  return article || null;
+}
 
 // ─── TRACK DATA ───────────────────────────────────────────────────────────────
 const TRACKS = [
@@ -177,7 +186,7 @@ function CoverArt({ track, size = 200 }) {
 }
 
 // ─── COVER FLOW VIEW ─────────────────────────────────────────────────────────
-function CoverFlowView({ tracks, selectedIndex }) {
+function CoverFlowView({ tracks, selectedIndex, onSelect }) {
   const sel = tracks[selectedIndex];
   const COVER = 220;
 
@@ -194,30 +203,60 @@ function CoverFlowView({ tracks, selectedIndex }) {
       }}
     >
       {/* Carousel */}
-      <div
+       <div
         style={{
-          perspective: "1000px",
-          height: COVER + 20,
+          perspective: "2500px",
+          height: COVER + 80,
           width: "100%",
           position: "relative",
+          transformStyle: "preserve-3d",
+          overflow: "visible",
         }}
       >
         {tracks.map((track, i) => {
-          const offset = i - selectedIndex;
-          const abs = Math.abs(offset);
-          if (abs > 3) return null;
-
-          const x = offset * 170;
-          const rotateY = offset === 0 ? 0 : offset < 0 ? 52 : -52;
-          const scale = abs === 0 ? 1 : abs === 1 ? 0.7 : 0.52;
-          const z = abs === 0 ? 0 : -90;
-          const opacity = abs > 2 ? 0 : abs === 2 ? 0.25 : 1;
+          const RADIUS = 400;
+          const ANGLE_STEP = 360 / tracks.length;
+          
+          let dist = i - selectedIndex;
+          // Shortest path in the circle
+          if (dist > tracks.length / 2) dist -= tracks.length;
+          if (dist < -tracks.length / 2) dist += tracks.length;
+          
+          const angle = dist * ANGLE_STEP;
+          const angleRad = (angle * Math.PI) / 180;
+          
+          // Carousel geometry: x, y, z positions
+          const x = RADIUS * Math.sin(angleRad);
+          const z = -RADIUS * (1 - Math.cos(angleRad)) * 0.8;
+          
+          // Rotation to face the viewer or the center
+          const rotateY = -angle; 
+          
+          // Visual tweaks based on distance from center
+          const absDist = Math.abs(dist);
+          const scale = 1 - absDist * 0.12;
+          const opacity = Math.max(0, 1 - absDist * 0.3);
+          const zIndex = 10 - Math.round(absDist * 2);
 
           return (
             <motion.div
               key={track.id}
-              animate={{ x, rotateY, scale, z, opacity }}
-              transition={{ type: "spring", stiffness: 280, damping: 32 }}
+              onClick={() => onSelect(i)}
+              whileTap={{ scale: 0.95 }}
+              animate={{ 
+                x, 
+                rotateY, 
+                scale, 
+                z, 
+                opacity,
+                filter: `blur(${absDist * 1.5}px)`
+              }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 150, 
+                damping: 25,
+                mass: 1
+              }}
               style={{
                 position: "absolute",
                 left: "50%",
@@ -225,7 +264,9 @@ function CoverFlowView({ tracks, selectedIndex }) {
                 marginLeft: -(COVER / 2),
                 marginTop: -(COVER / 2),
                 transformStyle: "preserve-3d",
-                zIndex: 10 - abs,
+                zIndex,
+                cursor: "pointer",
+                pointerEvents: absDist > 1.5 ? "none" : "auto",
               }}
             >
               <CoverArt track={track} size={COVER} />
@@ -286,7 +327,7 @@ function CoverFlowView({ tracks, selectedIndex }) {
 }
 
 // ─── TRACK LIST VIEW ─────────────────────────────────────────────────────────
-function TrackListView({ tracks, selectedIndex, currentIndex }) {
+function TrackListView({ tracks, selectedIndex, currentIndex, onSelect, onPlay }) {
   return (
     <div
       style={{
@@ -306,6 +347,8 @@ function TrackListView({ tracks, selectedIndex, currentIndex }) {
           return (
             <motion.div
               key={track.id}
+              onClick={() => onPlay(i)}
+              whileTap={{ backgroundColor: "rgba(255,255,255,0.08)" }}
               animate={{
                 backgroundColor: isSel ? `${track.accent}15` : "transparent",
               }}
@@ -317,6 +360,7 @@ function TrackListView({ tracks, selectedIndex, currentIndex }) {
                 padding: "0 14px",
                 borderRadius: 8,
                 gap: 12,
+                cursor: "pointer",
               }}
             >
               {/* Playing dot */}
@@ -424,7 +468,7 @@ function TrackListView({ tracks, selectedIndex, currentIndex }) {
 }
 
 // ─── NOW PLAYING VIEW ─────────────────────────────────────────────────────────
-function NowPlayingView({ track, isPlaying, elapsed, duration, onSeek }) {
+function NowPlayingView({ track, isPlaying, elapsed, duration, onSeek, onInfoToggle }) {
   const progress = duration > 0 ? elapsed / duration : 0;
   const barRef = useRef(null);
 
@@ -458,8 +502,29 @@ function NowPlayingView({ track, isPlaying, elapsed, duration, onSeek }) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.94 }}
           transition={{ duration: 0.24 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={onInfoToggle}
+          style={{ cursor: "pointer", position: "relative" }}
         >
           <CoverArt track={track} size={272} />
+          {/* Mobile indicator */}
+          <div style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            padding: "4px 8px",
+            background: "rgba(0,0,0,0.4)",
+            backdropFilter: "blur(4px)",
+            borderRadius: 12,
+            border: `1px solid ${track.accent}44`,
+            color: track.accent,
+            fontSize: 9,
+            fontWeight: "bold",
+            fontFamily: "var(--font-geist-mono)",
+            pointerEvents: "none"
+          }}>
+            INFO
+          </div>
         </motion.div>
       </AnimatePresence>
 
@@ -559,7 +624,7 @@ function NowPlayingView({ track, isPlaying, elapsed, duration, onSeek }) {
 }
 
 // ─── NOTES VIEW ──────────────────────────────────────────────────────────────
-function NotesView({ track, onClose }) {
+function NotesView({ track, article, onClose }) {
   const strata = [14, 26, 38, 50, 62, 74, 86];
 
   return (
@@ -740,19 +805,83 @@ function NotesView({ track, onClose }) {
             }}
           />
 
-          {/* Notes paragraph */}
-          <p
-            style={{
-              fontFamily: "var(--font-geist-sans), -apple-system, sans-serif",
-              fontSize: 15,
-              lineHeight: 1.8,
-              color: "rgba(255,255,255,0.72)",
-              margin: 0,
-              letterSpacing: "0.01em",
-            }}
-          >
-            {track.notes}
-          </p>
+          {/* Notes or article content */}
+          <div style={{ marginTop: 20 }}>
+            {article ? (
+              article.screens
+                .filter(screen => screen.type !== "cover")
+                .map((screen, idx) => {
+                  switch (screen.type) {
+                    case "text":
+                      return screen.content.map((paragraph, i) => (
+                        <p
+                          key={`${idx}-${i}`}
+                          style={{
+                            fontFamily: "var(--font-geist-sans), -apple-system, sans-serif",
+                            fontSize: 15,
+                            lineHeight: 1.8,
+                            color: "rgba(255,255,255,0.72)",
+                            margin: 0,
+                            marginBottom: "1.5em",
+                            letterSpacing: "0.01em",
+                          }}
+                        >
+                          {paragraph}
+                        </p>
+                      ));
+                    case "quote":
+                      return (
+                        <blockquote
+                          key={idx}
+                          style={{
+                            fontFamily: "var(--font-geist-sans), -apple-system, sans-serif",
+                            fontSize: 18,
+                            lineHeight: 1.6,
+                            color: track.accent,
+                            margin: "2em 0",
+                            paddingLeft: "1em",
+                            borderLeft: `2px solid ${track.accent}88`,
+                            fontStyle: "italic",
+                          }}
+                        >
+                          {screen.content}
+                        </blockquote>
+                      );
+                    case "closing":
+                      return (
+                        <p
+                          key={idx}
+                          style={{
+                            fontFamily: "var(--font-geist-sans), -apple-system, sans-serif",
+                            fontSize: 16,
+                            lineHeight: 1.8,
+                            color: "rgba(255,255,255,0.6)",
+                            margin: "2em 0 1em",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          {screen.content}
+                        </p>
+                      );
+                    default:
+                      return null;
+                  }
+                })
+            ) : (
+              <p
+                style={{
+                  fontFamily: "var(--font-geist-sans), -apple-system, sans-serif",
+                  fontSize: 15,
+                  lineHeight: 1.8,
+                  color: "rgba(255,255,255,0.72)",
+                  margin: 0,
+                  letterSpacing: "0.01em",
+                }}
+              >
+                {track.notes}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Hint */}
@@ -781,7 +910,7 @@ function NotesView({ track, onClose }) {
 }
 
 // ─── PLAYER ───────────────────────────────────────────────────────────────────
-export default function IPodPlayer() {
+export default function IPodPlayer({ isStandalone = true, onBack }) {
   const [view, setView] = useState("coverflow"); // coverflow | tracklist | nowplaying
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
@@ -797,6 +926,7 @@ export default function IPodPlayer() {
 
   const currentTrack  = TRACKS[currentTrackIndex];
   const highlightTrack = TRACKS[selectedIndex];
+  const currentArticle = getArticleForTrack(currentTrack.number);
 
   // ── Init audio
   useEffect(() => {
@@ -884,7 +1014,7 @@ export default function IPodPlayer() {
   const handleScroll = useCallback(
     (steps) => {
       if (view === "nowplaying") return;
-      setSelectedIndex((prev) => Math.max(0, Math.min(TRACKS.length - 1, prev + steps)));
+      setSelectedIndex((prev) => ((prev + steps) % TRACKS.length + TRACKS.length) % TRACKS.length);
     },
     [view]
   );
@@ -951,7 +1081,7 @@ export default function IPodPlayer() {
       ref={containerRef}
       className="ipod-no-select"
       style={{
-        position: "fixed",
+        position: isStandalone ? "fixed" : "absolute",
         inset: 0,
         background: "#070708",
         display: "flex",
@@ -1015,19 +1145,25 @@ export default function IPodPlayer() {
         </span>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <Link
-            href="/notas"
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 9,
-              color: "rgba(255,255,255,0.18)",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              textDecoration: "none",
-            }}
-          >
-            NOTAS
-          </Link>
+          {view === "nowplaying" && (
+            <button
+              onClick={() => setNotesOpen(true)}
+              style={{
+                fontFamily: "var(--font-geist-mono), monospace",
+                fontSize: 9,
+                color: currentTrack.accent,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                background: "rgba(255,255,255,0.05)",
+                border: "none",
+                cursor: "pointer",
+                padding: "4px 8px",
+                borderRadius: 4,
+              }}
+            >
+              INFO
+            </button>
+          )}
           {view !== "coverflow" && (
             <button
               onClick={handleMenu}
@@ -1069,7 +1205,14 @@ export default function IPodPlayer() {
             transition={{ duration: 0.22 }}
             style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative", zIndex: 10, overflow: "hidden" }}
           >
-            <CoverFlowView tracks={TRACKS} selectedIndex={selectedIndex} />
+            <CoverFlowView 
+              tracks={TRACKS} 
+              selectedIndex={selectedIndex} 
+              onSelect={(index) => {
+                if (index === selectedIndex) handleSelect();
+                else setSelectedIndex(index);
+              }}
+            />
           </motion.div>
         )}
 
@@ -1086,6 +1229,7 @@ export default function IPodPlayer() {
               tracks={TRACKS}
               selectedIndex={selectedIndex}
               currentIndex={currentTrackIndex}
+              onPlay={(i) => playTrack(i)}
             />
           </motion.div>
         )}
@@ -1105,6 +1249,7 @@ export default function IPodPlayer() {
               elapsed={elapsed}
               duration={audioDuration}
               onSeek={handleSeek}
+              onInfoToggle={() => setNotesOpen(true)}
             />
           </motion.div>
         )}
@@ -1151,10 +1296,11 @@ export default function IPodPlayer() {
               zIndex: 60,
             }}
           >
-            <NotesView
-              track={currentTrack}
-              onClose={() => setNotesOpen(false)}
-            />
+             <NotesView
+               track={currentTrack}
+               article={currentArticle}
+               onClose={() => setNotesOpen(false)}
+             />
           </motion.div>
         )}
       </AnimatePresence>

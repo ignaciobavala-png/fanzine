@@ -228,7 +228,7 @@ function ClosingScreen({ screen, accent }) {
 // ─── READER ───────────────────────────────────────────────────────────────────
 const SPRING = { type: "spring", stiffness: 380, damping: 40 };
 
-export default function ArticleReader({ article }) {
+export default function ArticleReader({ article, onBack, isStandalone = true }) {
   const [screen, setScreen] = useState(0);
   const directionRef = useRef(1);
   const router = useRouter();
@@ -247,9 +247,13 @@ export default function ArticleReader({ article }) {
       directionRef.current = -1;
       setScreen((s) => s - 1);
     } else {
-      router.push("/notas");
+      if (onBack) {
+        onBack();
+      } else {
+        router.push("/notas");
+      }
     }
-  }, [screen, router]);
+  }, [screen, router, onBack]);
 
   // Keyboard
   useEffect(() => {
@@ -258,12 +262,19 @@ export default function ArticleReader({ article }) {
         case "ArrowRight":
         case " ":         e.preventDefault(); goNext(); break;
         case "ArrowLeft": goPrev(); break;
-        case "Escape":    router.push("/notas"); break;
+        case "Escape":
+          if (onBack) {
+            e.preventDefault();
+            onBack();
+          } else {
+            router.push("/notas");
+          }
+          break;
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goNext, goPrev, router]);
+  }, [goNext, goPrev, router, onBack]);
 
   // Touch swipe
   const touchRef = useRef(null);
@@ -306,7 +317,7 @@ export default function ArticleReader({ article }) {
       ref={containerRef}
       className="ipod-no-select"
       style={{
-        position: "fixed",
+        position: isStandalone ? "fixed" : "absolute",
         inset: 0,
         background: "#070708",
         display: "flex",
@@ -371,7 +382,7 @@ export default function ArticleReader({ article }) {
           SUBSTRATO
         </span>
         <button
-          onClick={() => router.push("/notas")}
+          onClick={() => onBack ? onBack() : router.push("/notas")}
           style={{
             fontFamily: "var(--font-geist-mono), monospace",
             fontSize: 9,

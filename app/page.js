@@ -1,5 +1,5 @@
-import IPodPlayer from "@/components/IPodPlayer";
+import App from "@/components/App";
 
 export default function Page() {
-  return <IPodPlayer />;
+  return <App />;
 }

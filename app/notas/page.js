@@ -1,5 +1,4 @@
-import { ARTICLES } from "@/lib/articles";
-import ArticleIndex from "@/components/ArticleIndex";
+import App from "@/components/App";
 
 export const metadata = {
   title: "Notas — Substrato",
@@ -7,5 +6,5 @@ export const metadata = {
 };
 
 export default function NotasPage() {
-  return <ArticleIndex articles={ARTICLES} />;
+  return <App />;
 }
